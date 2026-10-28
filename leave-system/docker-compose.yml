@@ -1,0 +1,95 @@
+services:
+  # ========================================================
+  # Camunda 8 Self-Managed Components (Zeebe, Operate, ES)
+  # ========================================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: leave-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - leave-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cat/health | grep -q green || grep -q yellow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  zeebe:
+    image: camunda/zeebe:8.5.11
+    container_name: leave-zeebe
+    environment:
+      - ZEEBE_BROKER_EXPORTERS_ELASTICSEARCH_CLASSNAME=io.camunda.zeebe.exporter.ElasticsearchExporter
+      - ZEEBE_BROKER_EXPORTERS_ELASTICSEARCH_ARGS_URL=http://elasticsearch:9200
+      - ZEEBE_BROKER_EXPORTERS_ELASTICSEARCH_ARGS_BULK_SIZE=1
+      - ZEEBE_BROKER_GATEWAY_SECURITY_PLAINTEXT=true
+    ports:
+      - "26500:26500" # Zeebe Gateway
+      - "9600:9600"   # Zeebe Management/Metrics
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - leave-network
+
+  operate:
+    image: camunda/operate:8.5.11
+    container_name: leave-operate
+    environment:
+      - CAMUNDA_OPERATE_ZEEBE_GATEWAYADDRESS=zeebe:26500
+      - CAMUNDA_OPERATE_ELASTICSEARCH_URL=http://elasticsearch:9200
+      - CAMUNDA_OPERATE_ZEEBEELASTICSEARCH_URL=http://elasticsearch:9200
+    ports:
+      - "8080:8080" # Operate Web UI (Username: demo / Password: demo)
+    depends_on:
+      - zeebe
+      - elasticsearch
+    networks:
+      - leave-network
+
+  # ========================================================
+  # Application Services: Backend (Spring Boot) & Frontend
+  # ========================================================
+  leave-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: leave-backend
+    environment:
+      - SERVER_PORT=8081
+      - ZEEBE_GATEWAY_ADDRESS=zeebe:26500
+      - SPRING_DATASOURCE_URL=jdbc:h2:file:/app/data/leavedb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;AUTO_SERVER=TRUE
+    ports:
+      - "8081:8081" # Spring Boot REST API & H2 Console
+    volumes:
+      - backend_h2_data:/app/data
+    depends_on:
+      - zeebe
+    networks:
+      - leave-network
+
+  leave-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: leave-frontend
+    ports:
+      - "5173:80" # Vite/React application mapped to host port 5173
+    depends_on:
+      - leave-backend
+    networks:
+      - leave-network
+
+networks:
+  leave-network:
+    driver: bridge
+
+volumes:
+  es_data:
+  backend_h2_data:

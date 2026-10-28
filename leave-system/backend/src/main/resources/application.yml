@@ -1,0 +1,49 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: leave-application-system
+
+  datasource:
+    url: jdbc:h2:file:./data/leavedb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
+
+# Camunda 8 Self-Managed Client Configuration
+camunda:
+  client:
+    mode: simple
+    zeebe:
+      gateway-address: ${ZEEBE_GATEWAY_ADDRESS:localhost:26500}
+      security:
+        plaintext: true
+      defaults:
+        enabled: true
+      deployment:
+        resources:
+          - "classpath:bpmn/leave-request.bpmn"
+          - "classpath:bpmn/leave-approval.form"
+
+logging:
+  level:
+    root: INFO
+    com.example.leave: DEBUG
+    io.camunda.zeebe.client: WARN

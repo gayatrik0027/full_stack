@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  id="Definitions_LeaveRequest"
+                  targetNamespace="http://bpmn.io/schema/bpmn"
+                  exporter="Camunda Modeler"
+                  exporterVersion="5.26.0">
+  <bpmn:process id="leave-request" name="Leave Request Workflow" isExecutable="true">
+    
+    <!-- Start Event -->
+    <bpmn:startEvent id="StartEvent_LeaveRequested" name="Leave requested">
+      <bpmn:outgoing>Flow_StartToValidate</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <!-- Step 1: Validate Leave Request Service Task -->
+    <bpmn:serviceTask id="Task_ValidateLeave" name="Validate leave request">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="validate-leave" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_StartToValidate</bpmn:incoming>
+      <bpmn:outgoing>Flow_ValidateToGatewayValid</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- Gateway 1: Request Valid? -->
+    <bpmn:exclusiveGateway id="Gateway_RequestValid" name="Request valid?" default="Flow_ValidNo">
+      <bpmn:incoming>Flow_ValidateToGatewayValid</bpmn:incoming>
+      <bpmn:outgoing>Flow_ValidYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ValidNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Step 2: Manager Approval User Task -->
+    <bpmn:userTask id="Task_ManagerApproval" name="Manager approval">
+      <bpmn:extensionElements>
+        <zeebe:formDefinition formId="leave-approval" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ValidYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApprovalToGatewayApproved</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <!-- Gateway 2: Approved? -->
+    <bpmn:exclusiveGateway id="Gateway_Approved" name="Approved?" default="Flow_ApprovedNo">
+      <bpmn:incoming>Flow_ApprovalToGatewayApproved</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApprovedYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ApprovedNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Step 3A: Finalize as Approved Service Task -->
+    <bpmn:serviceTask id="Task_FinalizeApproved" name="Finalize as approved">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="finalize-leave" />
+        <zeebe:ioMapping>
+          <zeebe:input source="= &quot;APPROVED&quot;" target="outcome" />
+        </zeebe:ioMapping>
+        <zeebe:taskHeaders>
+          <zeebe:header key="outcome" value="APPROVED" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ApprovedYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_FinalizeApprovedToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- End Event: Approved -->
+    <bpmn:endEvent id="EndEvent_Approved" name="Leave approved">
+      <bpmn:incoming>Flow_FinalizeApprovedToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Merge Gateway for Rejection paths -->
+    <bpmn:exclusiveGateway id="Gateway_MergeRejection">
+      <bpmn:incoming>Flow_ValidNo</bpmn:incoming>
+      <bpmn:incoming>Flow_ApprovedNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_MergeToFinalizeRejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <!-- Step 3B: Finalize as Rejected Service Task -->
+    <bpmn:serviceTask id="Task_FinalizeRejected" name="Finalize as rejected">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="finalize-leave" />
+        <zeebe:ioMapping>
+          <zeebe:input source="= &quot;REJECTED&quot;" target="outcome" />
+        </zeebe:ioMapping>
+        <zeebe:taskHeaders>
+          <zeebe:header key="outcome" value="REJECTED" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_MergeToFinalizeRejected</bpmn:incoming>
+      <bpmn:outgoing>Flow_FinalizeRejectedToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <!-- End Event: Rejected -->
+    <bpmn:endEvent id="EndEvent_Rejected" name="Leave rejected">
+      <bpmn:incoming>Flow_FinalizeRejectedToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <!-- Sequence Flows -->
+    <bpmn:sequenceFlow id="Flow_StartToValidate" sourceRef="StartEvent_LeaveRequested" targetRef="Task_ValidateLeave" />
+    <bpmn:sequenceFlow id="Flow_ValidateToGatewayValid" sourceRef="Task_ValidateLeave" targetRef="Gateway_RequestValid" />
+    
+    <bpmn:sequenceFlow id="Flow_ValidYes" name="Yes" sourceRef="Gateway_RequestValid" targetRef="Task_ManagerApproval">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= valid = true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ValidNo" name="No" sourceRef="Gateway_RequestValid" targetRef="Gateway_MergeRejection" />
+    
+    <bpmn:sequenceFlow id="Flow_ApprovalToGatewayApproved" sourceRef="Task_ManagerApproval" targetRef="Gateway_Approved" />
+    
+    <bpmn:sequenceFlow id="Flow_ApprovedYes" name="Yes" sourceRef="Gateway_Approved" targetRef="Task_FinalizeApproved">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">= approved = true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ApprovedNo" name="No" sourceRef="Gateway_Approved" targetRef="Gateway_MergeRejection" />
+    
+    <bpmn:sequenceFlow id="Flow_FinalizeApprovedToEnd" sourceRef="Task_FinalizeApproved" targetRef="EndEvent_Approved" />
+    <bpmn:sequenceFlow id="Flow_MergeToFinalizeRejected" sourceRef="Gateway_MergeRejection" targetRef="Task_FinalizeRejected" />
+    <bpmn:sequenceFlow id="Flow_FinalizeRejectedToEnd" sourceRef="Task_FinalizeRejected" targetRef="EndEvent_Rejected" />
+
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="leave-request">
+      
+      <!-- Shapes -->
+      <bpmndi:BPMNShape id="_BPMNShape_StartEvent" bpmnElement="StartEvent_LeaveRequested">
+        <dc:Bounds x="160" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="138" y="185" width="82" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Activity_ValidateLeave_di" bpmnElement="Task_ValidateLeave">
+        <dc:Bounds x="250" y="120" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Gateway_RequestValid_di" bpmnElement="Gateway_RequestValid" isMarkerVisible="true">
+        <dc:Bounds x="425" y="135" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="414" y="105" width="73" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Activity_ManagerApproval_di" bpmnElement="Task_ManagerApproval">
+        <dc:Bounds x="540" y="120" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Gateway_Approved_di" bpmnElement="Gateway_Approved" isMarkerVisible="true">
+        <dc:Bounds x="725" y="135" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="723" y="105" width="54" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Activity_FinalizeApproved_di" bpmnElement="Task_FinalizeApproved">
+        <dc:Bounds x="840" y="120" width="130" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Event_Approved_di" bpmnElement="EndEvent_Approved">
+        <dc:Bounds x="1032" y="142" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1012" y="185" width="78" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Gateway_MergeRejection_di" bpmnElement="Gateway_MergeRejection" isMarkerVisible="true">
+        <dc:Bounds x="725" y="275" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Activity_FinalizeRejected_di" bpmnElement="Task_FinalizeRejected">
+        <dc:Bounds x="840" y="260" width="130" height="80" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Event_Rejected_di" bpmnElement="EndEvent_Rejected">
+        <dc:Bounds x="1032" y="282" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1014" y="325" width="73" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_StartToValidate_di" bpmnElement="Flow_StartToValidate">
+        <di:waypoint x="196" y="160" />
+        <di:waypoint x="250" y="160" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ValidateToGatewayValid_di" bpmnElement="Flow_ValidateToGatewayValid">
+        <di:waypoint x="370" y="160" />
+        <di:waypoint x="425" y="160" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ValidYes_di" bpmnElement="Flow_ValidYes">
+        <di:waypoint x="475" y="160" />
+        <di:waypoint x="540" y="160" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="498" y="142" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ValidNo_di" bpmnElement="Flow_ValidNo">
+        <di:waypoint x="450" y="185" />
+        <di:waypoint x="450" y="300" />
+        <di:waypoint x="725" y="300" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="458" y="238" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ApprovalToGatewayApproved_di" bpmnElement="Flow_ApprovalToGatewayApproved">
+        <di:waypoint x="660" y="160" />
+        <di:waypoint x="725" y="160" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ApprovedYes_di" bpmnElement="Flow_ApprovedYes">
+        <di:waypoint x="775" y="160" />
+        <di:waypoint x="840" y="160" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="799" y="142" width="18" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_ApprovedNo_di" bpmnElement="Flow_ApprovedNo">
+        <di:waypoint x="750" y="185" />
+        <di:waypoint x="750" y="275" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="758" y="228" width="15" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_FinalizeApprovedToEnd_di" bpmnElement="Flow_FinalizeApprovedToEnd">
+        <di:waypoint x="970" y="160" />
+        <di:waypoint x="1032" y="160" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_MergeToFinalizeRejected_di" bpmnElement="Flow_MergeToFinalizeRejected">
+        <di:waypoint x="775" y="300" />
+        <di:waypoint x="840" y="300" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_FinalizeRejectedToEnd_di" bpmnElement="Flow_FinalizeRejectedToEnd">
+        <di:waypoint x="970" y="300" />
+        <di:waypoint x="1032" y="300" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

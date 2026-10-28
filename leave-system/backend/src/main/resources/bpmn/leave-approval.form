@@ -1,0 +1,74 @@
+{
+  "executionPlatform": "Camunda Cloud",
+  "executionPlatformVersion": "8.5.0",
+  "exporter": {
+    "name": "Camunda Modeler",
+    "version": "5.26.0"
+  },
+  "schemaVersion": 16,
+  "id": "leave-approval",
+  "components": [
+    {
+      "text": "### Leave Request Approval\nPlease review the employee's leave details below and make an approval decision.",
+      "type": "text",
+      "id": "Text_Title"
+    },
+    {
+      "label": "Request ID",
+      "type": "number",
+      "id": "Field_requestId",
+      "key": "requestId",
+      "disabled": true
+    },
+    {
+      "label": "Employee Email",
+      "type": "textfield",
+      "id": "Field_employeeEmail",
+      "key": "employeeEmail",
+      "disabled": true
+    },
+    {
+      "label": "Leave Type",
+      "type": "textfield",
+      "id": "Field_leaveType",
+      "key": "leaveType",
+      "disabled": true
+    },
+    {
+      "label": "Working Days Requested",
+      "type": "number",
+      "id": "Field_days",
+      "key": "days",
+      "disabled": true
+    },
+    {
+      "label": "Start Date",
+      "type": "textfield",
+      "id": "Field_startDate",
+      "key": "startDate",
+      "disabled": true
+    },
+    {
+      "label": "End Date",
+      "type": "textfield",
+      "id": "Field_endDate",
+      "key": "endDate",
+      "disabled": true
+    },
+    {
+      "label": "Approve this leave request",
+      "type": "checkbox",
+      "id": "Field_approved",
+      "key": "approved",
+      "defaultValue": false
+    },
+    {
+      "label": "Manager Comment",
+      "type": "textarea",
+      "id": "Field_managerComment",
+      "key": "managerComment",
+      "description": "Optional notes or reason for approval / rejection"
+    }
+  ],
+  "type": "default"
+}
